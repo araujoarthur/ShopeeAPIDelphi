@@ -1,0 +1,51 @@
+package ShopeeAPI;
+
+{$R *.res}
+{$IFDEF IMPLICITBUILDING This IFDEF should not be used by users}
+{$ALIGN 8}
+{$ASSERTIONS ON}
+{$BOOLEVAL OFF}
+{$DEBUGINFO OFF}
+{$EXTENDEDSYNTAX ON}
+{$IMPORTEDDATA ON}
+{$IOCHECKS ON}
+{$LOCALSYMBOLS ON}
+{$LONGSTRINGS ON}
+{$OPENSTRINGS ON}
+{$OPTIMIZATION OFF}
+{$OVERFLOWCHECKS ON}
+{$RANGECHECKS ON}
+{$REFERENCEINFO ON}
+{$SAFEDIVIDE OFF}
+{$STACKFRAMES ON}
+{$TYPEDADDRESS OFF}
+{$VARSTRINGCHECKS ON}
+{$WRITEABLECONST OFF}
+{$MINENUMSIZE 1}
+{$IMAGEBASE $400000}
+{$DEFINE DEBUG}
+{$ENDIF IMPLICITBUILDING}
+{$IMPLICITBUILD ON}
+
+requires
+  rtl,
+  vcl,
+  IndySystem,
+  IndyProtocols,
+  IndyCore;
+
+contains
+  Shopee.API.RequestHandler in 'Shopee.API.RequestHandler.pas',
+  Shopee.API.Configurator in 'Shopee.API.Configurator.pas',
+  Shopee.API.OAuth.Authorization in 'Shopee.API.OAuth.Authorization.pas',
+  Core.Server in 'Core.Server.pas',
+  Shopee.API.Catcher in 'Shopee.API.Catcher.pas',
+  Shopee.API.OAuth.Authentication in 'Shopee.API.OAuth.Authentication.pas',
+  Shopee.Context in 'Shopee.Context.pas',
+  Core.GlobalEvents in 'Core.GlobalEvents.pas',
+  Shopee.Interfaces.DataHolder in 'Shopee.Interfaces.DataHolder.pas',
+  Shopee.Core.DataHolder in 'Shopee.Core.DataHolder.pas',
+  Shopee.API.Endpoints in 'Shopee.API.Endpoints.pas',
+  Core.Utils in 'Core.Utils.pas';
+
+end.

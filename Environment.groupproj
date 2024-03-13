@@ -1,0 +1,48 @@
+﻿<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+    <PropertyGroup>
+        <ProjectGuid>{382EE414-1B94-4768-B24A-40C73F33E5FC}</ProjectGuid>
+    </PropertyGroup>
+    <ItemGroup>
+        <Projects Include="ShopeeAPI.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="TestApplication\TestApplication.dproj">
+            <Dependencies/>
+        </Projects>
+    </ItemGroup>
+    <ProjectExtensions>
+        <Borland.Personality>Default.Personality.12</Borland.Personality>
+        <Borland.ProjectType/>
+        <BorlandProject>
+            <Default.Personality/>
+        </BorlandProject>
+    </ProjectExtensions>
+    <Target Name="ShopeeAPI">
+        <MSBuild Projects="ShopeeAPI.dproj"/>
+    </Target>
+    <Target Name="ShopeeAPI:Clean">
+        <MSBuild Projects="ShopeeAPI.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="ShopeeAPI:Make">
+        <MSBuild Projects="ShopeeAPI.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="TestApplication">
+        <MSBuild Projects="TestApplication\TestApplication.dproj"/>
+    </Target>
+    <Target Name="TestApplication:Clean">
+        <MSBuild Projects="TestApplication\TestApplication.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="TestApplication:Make">
+        <MSBuild Projects="TestApplication\TestApplication.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="Build">
+        <CallTarget Targets="ShopeeAPI;TestApplication"/>
+    </Target>
+    <Target Name="Clean">
+        <CallTarget Targets="ShopeeAPI:Clean;TestApplication:Clean"/>
+    </Target>
+    <Target Name="Make">
+        <CallTarget Targets="ShopeeAPI:Make;TestApplication:Make"/>
+    </Target>
+    <Import Project="$(BDS)\Bin\CodeGear.Group.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')"/>
+</Project>
