@@ -15,7 +15,8 @@ uses
   Core.GlobalEvents,
   Shopee.Interfaces.DataHolder,
   Shopee.Core.DataHolder,
-  Shopee.API.Endpoints;
+  Shopee.API.Endpoints,
+  Core.Utils;
 
 type
   TTokenReceivedEvent = procedure of object;
@@ -27,6 +28,38 @@ type
   // otherwise returns false so the worker knows the user already updated the FDataHolder.
   TTokenRefreshNeededEvent = reference to function: Boolean;
 
+  TRequestData = record 
+  private
+    FRequestURL, FRequestSignature, FRequestPayload: string;
+    FRequestError: Boolean;
+    FRequestCommonParameters: TRequestParams;
+    FRequestResult: string;
+    FRequestMethod: string;
+  public
+    property URL: string read FRequestURL write FRequestURL;
+    property Signature: string read FRequestSignature write FRequestSignature;
+    property hasError: Boolean read FRequestError write FRequestError;
+    property CommonParameters: TRequestParams read FRequestCommonParameters write FRequestCommonParameters;
+    property Payload: string read FRequestPayload write FRequestPayload;
+    property RequestResult: string read FRequestResult write FRequestResult;
+    property Method: string read FRequestMethod write FRequestMethod;
+  end;
+  
+  TErrorData = record
+  private
+    FError, FMessage: string;
+    FErrorTimestamp: Integer;
+    FErrorDT: TDateTime;
+    FRequestResponseCode: Integer;
+  public
+    constructor Create(AError, AMessage: string; AResponseCode: Integer);
+
+    property Error: string read FError write FError;
+    property ErrorTimestamp: Integer read FErrorTimestamp write FErrorTimestamp;
+    property ErrorDateTime: TDateTime read FErrorDT write FErrorDT;
+    property RequestResponseCode: Integer read FRequestResponseCode write FRequestResponseCode;
+  end;
+  
   TShopeeContext = class
   private
     FHost: string;
@@ -37,6 +70,8 @@ type
     FRecentRequestBodyString: string;
     FRecentRequestStatusCode: Integer;
     FTokenResponseJSON: TJSONObject;
+    FLastErrorOccurred: TErrorData;
+    FLastRequestData: TRequestData;
 
     FOnTokenReceived: TTokenReceivedEvent;
     FOnRequestFailed: TRequestFailedEvent;
@@ -60,6 +95,8 @@ type
     property RequestResultString: string read FRequestResultString;
     property RecentRequestBodyString: string read FRecentRequestBodyString;
     property RecentRequestStatusCode: Integer read FRecentRequestStatusCode;
+    property LastErrorOccurred: TErrorData read FLastErrorOccurred;
+    property LastRequestData: TRequestData read FLastRequestData;
 
     {EVENTS}
     property OnTokenReceived: TTokenReceivedEvent read FOnTokenReceived write FOnTokenReceived;
@@ -67,6 +104,7 @@ type
     property OnAuthorizationDone: TAuthorizationDoneEvent read FOnAuthorizationDone write FOnAuthorizationDone;
     property OnGettingTokenErrorOcurred: TGettingTokenErrorOcurredEvent read FOnGettingTokenErrorOcurred write FOnGettingTokenErrorOcurred;
     property OnTokenRefreshNeeded: TTokenRefreshNeededEvent read FOnTokenRefreshNeeded write FOnTokenRefreshNeeded;
+
     {$IFDEF DEBUG}
     property DataHolder: IDataHolder read FDataHolder;
     {$ENDIF}
@@ -153,7 +191,6 @@ end;
 procedure TShopeeContext.GetData(ACode: string);
 var
   Authenticator: TAuthenticator;
-  ResponseJSON: TJSONObject;
 begin
 
   Authenticator := TAuthenticator.Create(FHost, FAPI_Key, FPartnerID, FDataHolder.Code, FDataHolder.EntityID, FDataHolder.AuthType);
@@ -165,13 +202,22 @@ begin
     Authenticator.Free;
   end;
 
-  if (FRecentRequestStatusCode <> 403) then
+  FTokenResponseJSON := TJSONObject.ParseJSONValue(FRequestResultString) as TJSONObject;
+
+  // If the request is not Forbidden.
+  if (FRecentRequestStatusCode <> 403) and (FTokenResponseJSON.Get('error').Value <> '') then
   begin
-    ResponseJSON := TJSONObject.ParseJSONValue(FRequestResultString) as TJSONObject;
-    FDataHolder.AccessToken := FTokenResponseJson.Get('access_token').Value;
-    FDataHolder.RefreshToken := FTokenResponseJson.Get('refresh_token').Value;
-    FDataHolder.ExpireTimestamp := GetCurrentUTCTimestamp + FTokenResponseJson.Get('expire_in').Value.ToInteger() - 150;
+    FDataHolder.AccessToken := FTokenResponseJSON.Get('access_token').Value;
+    FDataHolder.RefreshToken := FTokenResponseJSON.Get('refresh_token').Value;
+    FDataHolder.ExpireTimestamp := Integer(GetCurrentUTCTimestamp) + Integer(FTokenResponseJson.Get('expire_in').Value) - 150;
+  end else
+  begin
+    // Opens a door to check the last error occurred.
+    FLastErrorOccurred := TErrorData.Create(FTokenResponseJSON.Get('error').Value, 
+                                            FTokenResponseJSON.Get('message').Value,
+                                            FRecentRequestStatusCode);
   end;
+
 end;
 
 procedure TShopeeContext.GetToken;
@@ -190,8 +236,12 @@ end;
 function TShopeeContext.MakeRequest(AEndpoint: IEndpoint; APayload: TJSONObject): string;
 var
   RequestSignature: string;
+  RequestURL: string;
+  RequestData: TRequestData;
+  CommonParameters: TRequestParams;
   iSignatureTimestamp: Integer;
   HTTPClient: THTTPClient;
+  HTTPResponse: IHTTPResponse;
 begin
   CheckAndAuthorize; // Check if authorization is needed, authorize if so, returns if don't.
 
@@ -210,29 +260,62 @@ begin
   iSignatureTimestamp := GetCurrentUTCTimestamp;
   if AEndpoint.SignatureType = stPublic then
   begin
-    // Gen Signature for Public Request;
-    RequestSignature := AEndpoint.GetSignature(FAPI_Key, FPartnerID, iSignatureTimestamp, FDataHolder.AccessToken, FDataHolder.EntityID);
-  end else if AEndpoint.SignatureType = stShop then
+    // Generates Signature and Common Parameters for Public Request TO-DO;
+    end else if AEndpoint.SignatureType = stShop then
   begin
-    // Gen Signature for Shop Request; TO-DO
+    //  Generates Signature and Common Parameters for Shop Request; TO-DO
+    RequestSignature := AEndpoint.GetSignature(FAPI_Key, FPartnerID, iSignatureTimestamp, FDataHolder.AccessToken, FDataHolder.EntityID);
+    CommonParameters.AddItem('sign', RequestSignature);
+    CommonParameters.AddItem('partner_id', FPartnerID);
+    CommonParameters.AddItem('path', AEndpoint.Endpoint);
+    CommonParameters.AddItem('timestamp', IntToStr(iSignatureTimestamp));
+    CommonParameters.AddItem('shop_id', FDataHolder.EntityID);
   end else
   begin
-    // Gen Signature for Merchant Request; TO-DO
+    //  Generates Signature and Common Parameters for Merchant Request; TO-DO
   end;
 
+  // Builds the URL.
+  RequestURL := GenerateRequestURL(FHost, AEndpoint.Endpoint, CommonParameters);
+
+  // Start the building of LastRequestData logging record.
+  RequestData.URL := RequestURL;
+  RequestData.CommonParameters := CommonParameters;
+  RequestData.Signature := IntToStr(iSignatureTimestamp);
+   
+
+  
   // Creates the HTTP client needed for requests.
   HTTPClient := THTTPClient.Create;
   try
     HTTPClient.ContentType := 'application/json';
-
-    // Bifurcates dependig on the type of request needed.
-    if AEndpoint.EndpointMethod = rmGet then
-    begin
-
+    try
+      // Bifurcates dependig on the type of request needed.
+      if AEndpoint.EndpointMethod = rmGet then
+      begin
+        RequestData.Method := 'GET'; // Saves the request method in the LastRequestData logging record.
+        RequestData.Payload := '';
+        HTTPResponse := HTTPClient.Get(RequestURL);
+      end else if AEndpoint.EndpointMethod = rmPost then
+      begin
+        RequestData.Method := 'POST';
+        RequestData.Payload := APayload.ToString;
+        HTTPResponse := HTTPClient.Post(RequestURL, TStringStream.Create(APayload.ToString, TEncoding.UTF8));
+      end;  
+    except on E: Exception do
+      raise Exception.Create(E.Message);
     end;
+
+    // Deal with the response, check if error
+    // Use recursion to recall it if a 403 rises to ensure data needs to be updated. Pensar bastante, fazer diagrama se necessário.
+    // (If an error_auth rises, it might have updated on client side the refresh/access token, so if we recall we must ensure we receive data from client
+    // to update the FDataHolder. 
+    
   finally
     HTTPClient.Free;
   end;
+
+  FLastRequestData := RequestData;
 
 
 
@@ -264,6 +347,18 @@ begin
     2) If it's not time to get the token again, call users defined
     OnRequestFailed and retry the operation.
   }
+end;
+
+{ TErrorData }
+
+constructor TErrorData.Create(AError, AMessage: string; AResponseCode: Integer);
+begin
+  FErrorTimestamp := GetCurrentUTCTimestamp;
+  FErrorDT := Now();
+  
+  FError := AError;
+  FMessage := AMessage;
+  FRequestResponseCode := AResponseCode;
 end;
 
 end.

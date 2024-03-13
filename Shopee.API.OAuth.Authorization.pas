@@ -21,7 +21,8 @@ uses
   Shopee.API.RequestHandler,
   Shopee.API.Catcher,
   Shopee.Interfaces.DataHolder,
-  Core.GlobalEvents;
+  Core.GlobalEvents,
+  Core.Utils;
 
 type
 

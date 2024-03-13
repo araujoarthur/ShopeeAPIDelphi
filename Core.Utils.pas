@@ -4,11 +4,16 @@ interface
 uses
   System.Classes,
   System.SysUtils,
-  System.JSON;
+  System.JSON,
+  System.DateUtils;
 
 type
   TRequestParamsEnumerator = class;
 
+  {
+    TRequestParam is the unitary element of TRequestParams. It holds the
+    Name and Value of the parameter.
+  }
   TRequestParam = record
     private
       FName: string;
@@ -20,6 +25,11 @@ type
       property Value: string read FValue;
   end;
 
+  {
+    TRequestParams groups the parameter elements of a request.
+    For sake of simplicity, it must be used only for simple
+    requests, for instance: Query strings.
+  }
   TRequestParams = record
     private type RequestPrivateArray = array of TRequestParam;
 
@@ -40,9 +50,61 @@ type
       property Count: Integer read FCount;
   end;
 
-function GenerateRequestURL(const AAPIPath: string; AParameters: TRequestParams): string;
+  // Enumerator for the TRequestParams
+  TRequestParamsEnumerator = class
+    private
+      FIndex: Integer;
+      FList: TRequestParams;
+    public
+      constructor Create(AList: TRequestParams);
+
+      function MoveNext: Boolean;
+      function GetCurrent: TRequestParam;
+
+      property Current: TRequestParam read GetCurrent;
+  end;
+
+function GenerateRequestURL(const AHost, AAPIPath: string; AParameters: TRequestParams): string;
+function GetCurrentUTCTimestamp: UInt64;
+function GetQueryString(AParameters: TRequestParams): string;
+
 
 implementation
+
+{ Loose Utils Functions }
+function GenerateRequestURL(const AHost, AAPIPath: string; AParameters: TRequestParams): string;
+var
+  QueryString: string;
+  RequestURL: string;
+begin
+  QueryString := GetQueryString(AParameters);
+  RequestURL := AHost + AAPIPath + QueryString;
+  Result := RequestURL;
+end;
+
+function GetQueryString(AParameters: TRequestParams): string;
+var
+  QueryString: string;
+  RequestParam: TRequestParam;
+begin
+  QueryString := '?';
+  for RequestParam in AParameters do
+  begin
+    if QueryString.EndsWith('?') then
+    begin
+      QueryString := QueryString + RequestParam.Name + '=' + RequestParam.Value;
+    end else begin
+      QueryString := QueryString + '&' + RequestParam.Name + '=' + RequestParam.Value;
+    end;
+  end;
+
+  Result := QueryString;
+end;
+
+function GetCurrentUTCTimestamp: UInt64;
+begin
+  Result := DateTimeToUnix(TTimeZone.Local.ToUniversalTime(Now));
+end;
 
 { TRequestParam }
 
@@ -108,17 +170,6 @@ begin
   Result := TRequestParamsEnumerator.Create(Self);
 end;
 
-function TRequestParams.GetParam(Index: Integer): TRequestParam;
-begin
-  if (Length(FValues) = 0) or (Length(FValues) - 1 < Index) then
-  begin
-    raise ERangeError.Create('The provided index does not exist in the current list') at @TRequestParams.GetParam;
-  end else
-  begin
-    Result := FValues[Index];
-  end;
-end;
-
 procedure TRequestParams.RemoveItem(AParamIndex: Integer);
 var
   ArrLength: Integer;
@@ -155,6 +206,27 @@ begin
     raise ERangeError.Create('The provided index does not exist in the current list') at @TRequestParams.GetParam;
   end;
 
+end;
+
+
+{ TRequestParamsEnumerator }
+
+constructor TRequestParamsEnumerator.Create(AList: TRequestParams);
+begin
+  FList := AList;
+  FIndex := -1;
+end;
+
+function TRequestParamsEnumerator.GetCurrent: TRequestParam;
+begin
+  Result := FList[FIndex];
+end;
+
+function TRequestParamsEnumerator.MoveNext: Boolean;
+begin
+  Result := FIndex < (FList.Count - 1);
+  if Result then
+    Inc(FIndex);
 end;
 
 end.

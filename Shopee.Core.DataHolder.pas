@@ -4,7 +4,7 @@ interface
 
 uses
   System.DateUtils, System.SysUtils,
-  Shopee.Interfaces.DataHolder;
+  Shopee.Interfaces.DataHolder, Core.Utils;
 
 type
   TDataHolder = class(TInterfacedObject, IDataHolder)
@@ -41,14 +41,7 @@ type
     function IsAuthorized: Boolean;
   end;
 
-  function GetCurrentUTCTimestamp: UInt64;
-
 implementation
-
-function GetCurrentUTCTimestamp: UInt64;
-begin
-  Result := DateTimeToUnix(TTimeZone.Local.ToUniversalTime(Now));
-end;
 
 { TDataHolder }
 

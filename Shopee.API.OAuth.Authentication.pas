@@ -11,7 +11,7 @@ unit Shopee.API.OAuth.Authentication;
 interface
 uses
   System.SysUtils, System.JSON,
-  Shopee.API.RequestHandler;
+  Shopee.API.RequestHandler, Core.Utils;
 
 type
   TAuthenticator = class(TRequestCapable)
